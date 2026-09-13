@@ -49,7 +49,7 @@ object MotionTheme {
     val SurfaceHighlight = Color(0xFF2A2E39)
     val ElectricBlue = Color(0xFF3B82F6)
     val NeonViolet = Color(0xFF8B5CF6)
-    val TextPrimary = Color(0xFFFFFFFF)
+    val lage TextPrimary = Color(0xFFFFFFFF)
     val TextSecondary = Color(0xFF9CA3AF)
     val BorderColor = Color(0xFF2D3139)
     val AccentGreen = Color(0xFF10B981)
