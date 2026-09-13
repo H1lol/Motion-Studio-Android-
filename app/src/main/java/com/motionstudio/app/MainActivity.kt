@@ -1,4 +1,4 @@
-package com.motionstudio.animeeditor
+package com.motionstudio.app
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
