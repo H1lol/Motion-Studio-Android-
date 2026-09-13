@@ -761,7 +761,7 @@ fun TimelineEditorView(viewModel: StudioViewModel) {
                                 imageVector = when (tool) {
                                     TimelineTool.SELECT -> Icons.Default.NearMe
                                     TimelineTool.RAZOR -> Icons.Default.ContentCut
-                                    TimelineTool.TRIM -> Icons.Default.ContentSelect
+                                    TimelineTool.TRIM -> Icons.Default.Straighten
                                     TimelineTool.KEYFRAME -> Icons.Default.Diamond
                                     TimelineTool.RIPPLE -> Icons.Default.DoubleArrow
                                 },
