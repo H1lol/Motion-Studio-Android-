@@ -1531,7 +1531,7 @@ fun ExportModalDialog(viewModel: StudioViewModel) {
                 Text("Cancel", fontSize = 10.sp, color = StudioTheme.TextMuted)
             }
         }
-    }
+    )
 }
 
 // ============================================================================
