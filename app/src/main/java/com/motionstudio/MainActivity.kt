@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 
-package com.motionstudio.app
+package com.motionstudio
 
 import android.app.Application
 import android.os.Bundle
@@ -50,10 +50,6 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
-import com.motionstudio.app.ui.editor.components.curve.BezierHandle
-import com.motionstudio.app.ui.editor.components.curve.CurvePoint
-import com.motionstudio.app.ui.editor.components.curve.InterpolationType
-import com.motionstudio.app.ui.editor.components.timeline.EditorScreenState
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
