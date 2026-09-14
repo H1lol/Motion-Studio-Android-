@@ -1,12 +1,91 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="fr.natron.Natron">
+
+    <!-- Network access for plugins, Python packages and future functionality -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Audio/video/media access where required by Android versions -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+
+    <!-- For older Android versions -->
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+
     <application
-        android:label="Motion Studio"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar">
-        <activity android:name=".MainActivity" android:exported="true">
+        android:name=".NatronApplication"
+        android:allowBackup="false"
+        android:hardwareAccelerated="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="Natron"
+        android:largeHeap="true"
+        android:resizeableActivity="true"
+        android:supportsRtl="true"
+        android:theme="@style/NatronTheme">
+
+        <activity
+            android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:screenOrientation="landscape"
+            android:windowSoftInputMode="adjustResize">
+
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Open Natron project files -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:mimeType="application/x-natron" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+            </intent-filter>
+
         </activity>
+
+        <!--
+             Qt Android deployment metadata.
+
+             The native library name will eventually correspond
+             to the Android-built Natron native library.
+        -->
+        <meta-data
+            android:name="android.app.lib_name"
+            android:value="Natron" />
+
+        <meta-data
+            android:name="android.app.bundle_local_qt_libs"
+            android:value="1" />
+
+        <meta-data
+            android:name="android.app.use_local_qt_libs"
+            android:value="1" />
+
+        <meta-data
+            android:name="android.app.qt_libs_resource_id"
+            android:resource="@array/qt_libs" />
+
+        <meta-data
+            android:name="android.app.qt_sources_resource_id"
+            android:resource="@array/qt_sources" />
+
+        <meta-data
+            android:name="android.app.qt_libs_prefix"
+            android:value="/data/local/tmp/qt" />
+
     </application>
+
 </manifest>
