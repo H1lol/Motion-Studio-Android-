@@ -476,8 +476,6 @@ class MainActivity : Activity(), TimelineHost {
         addHeader("STATUS")
         addTool("Pipeline: ${ProModeBlock.statusLabel()}") {}
     }
-
-    // ===== END OF PART 1 =====
     // =========================================================================
 // TimelineHost implementation — the contract with Timeline.kt
 // =========================================================================
@@ -719,8 +717,6 @@ private fun saveProjectTo(uri: Uri) {
         }
     }
 }
-
-// ===== END OF PART 2 =====
     // =========================================================================
     // Inspector
     // =========================================================================
