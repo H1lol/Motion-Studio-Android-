@@ -96,7 +96,7 @@ class MainActivity : Activity(), TimelineHost {
     private lateinit var statusLabel: TextView
     private lateinit var nodeOverlay: FrameLayout
     private lateinit var scene3DOverlay: FrameLayout
-
+    private lateinit var overlayLayer: FrameLayout
     // -------------------------------------------------------------------------
     // Lifecycle
     // -------------------------------------------------------------------------
@@ -180,7 +180,7 @@ class MainActivity : Activity(), TimelineHost {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(BLACK)
         }
-        mainBody.addView(leftPanel, LinearLayout.LayoutParams(dp(240), -1))
+        mainBody.addView(leftPanel, LinearLayout.LayoutParams(dp(165), -1))
 
         centerPanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -192,14 +192,14 @@ class MainActivity : Activity(), TimelineHost {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(BLACK)
         }
-        mainBody.addView(rightPanel, LinearLayout.LayoutParams(dp(280), -1))
+        mainBody.addView(rightPanel, LinearLayout.LayoutParams(dp(190), -1))
 
         buildLeftPanel()
         buildCenterPanel()
         buildRightPanel()
 
         val timelinePanel = buildTimelinePanel()
-        column.addView(timelinePanel, LinearLayout.LayoutParams(-1, dp(220)))
+        column.addView(timelinePanel, LinearLayout.LayoutParams(-1, dp(140)))
 
         buildNodeOverlay()
         build3DOverlay()
@@ -208,30 +208,32 @@ class MainActivity : Activity(), TimelineHost {
     }
 
     private fun buildTopBar(): LinearLayout {
-        val bar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setBackgroundColor(BLACK)
-            setPadding(dp(8), 0, dp(8), 0)
-        }
-        bar.addView(textLabel("MOTION STUDIO", 12f).apply {
-            typeface = Typeface.DEFAULT_BOLD
-            setPadding(dp(4), 0, dp(12), 0)
-        }, LinearLayout.LayoutParams(-2, -1))
+    val bar = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setBackgroundColor(BLACK)
+        setPadding(dp(8), 0, dp(8), 0)
+    }
+    bar.addView(textLabel("MOTION STUDIO", 12f).apply {
+        typeface = Typeface.DEFAULT_BOLD
+        setPadding(dp(4), 0, dp(8), 0)
+    }, LinearLayout.LayoutParams(-2, -1))
 
-        listOf("EDIT", "TEXT", "FX", "NODES", "3D", "DELIVER").forEach { page ->
-            bar.addView(outlineButton(page) { switchPage(page) }, buttonLp(72))
-        }
-        bar.addView(View(this), LinearLayout.LayoutParams(0, -1, 1f))
+    bar.addView(View(this), LinearLayout.LayoutParams(0, -1, 1f))
 
-        statusLabel = textLabel("READY", 10f).apply { gravity = Gravity.CENTER }
-        bar.addView(statusLabel, LinearLayout.LayoutParams(dp(120), -1))
+    statusLabel = textLabel("READY", 10f).apply { gravity = Gravity.CENTER }
+    bar.addView(statusLabel, LinearLayout.LayoutParams(dp(90), -1))
 
-        bar.addView(outlineButton("PRO") { toggleProMode() }, buttonLp(52))
-        bar.addView(outlineButton("NEW") { newProject() }, buttonLp(52))
-        bar.addView(outlineButton("SAVE") { saveProject() }, buttonLp(56))
-        bar.addView(outlineButton("OPEN") { openProject() }, buttonLp(56))
-        bar.addView(outlineButton("RENDER") { renderCurrent() }, buttonLp(72))
+    // The two overlay toggles — top right
+    bar.addView(outlineButton("TOOLS") { toggleLeftPanel() }, buttonLp(62))
+    bar.addView(outlineButton("INSPECT") { toggleRightPanel() }, buttonLp(70))
+
+    bar.addView(outlineButton("NEW") { newProject() }, buttonLp(48))
+    bar.addView(outlineButton("SAVE") { saveProject() }, buttonLp(52))
+    bar.addView(outlineButton("OPEN") { openProject() }, buttonLp(52))
+    bar.addView(outlineButton("RENDER") { renderCurrent() }, buttonLp(64))
+    return bar
+    }
         return bar
     }
     private fun buildLeftPanel() {
@@ -261,7 +263,13 @@ private fun buildCenterPanel() {
     centerPanel.removeAllViews()
     viewerFrame = FrameLayout(this).apply { setBackgroundColor(BLACK) }
     centerPanel.addView(viewerFrame, LinearLayout.LayoutParams(-1, 0, 1f))
-
+// In buildCenterPanel, before the GLSurfaceView is added:
+val hint = textLabel("Tap IMPORT to add media, or TOOLS to see options", 11f).apply {
+    setTextColor(GRAY)
+    gravity = Gravity.CENTER
+    setPadding(dp(20), dp(20), dp(20), dp(20))
+}
+viewerFrame.addView(hint, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
     // Wire 6: mount the GL viewer
     val r = GlEffectRenderer(this, state)
 renderer = r
@@ -323,19 +331,23 @@ private fun buildTimelinePanel(): LinearLayout {
     timelineScroll.addView(timelineView, FrameLayout.LayoutParams(-2, -1))
     panel.addView(timelineScroll, LinearLayout.LayoutParams(-1, 0, 1f))
 
-    val strip = LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
-        setPadding(dp(6), dp(3), dp(6), dp(3))
-    }
-    strip.addView(outlineButton("IMPORT") { pickMedia() }, buttonLp(64))
-    strip.addView(outlineButton("AUDIO") { pickAudio() }, buttonLp(56))
-    strip.addView(outlineButton("IMAGE") { pickImage() }, buttonLp(56))
-    strip.addView(outlineButton("ADD") { addSelectedAssetToTimeline() }, buttonLp(52))
-    strip.addView(outlineButton("BEATS") { analyzeBeats() }, buttonLp(58))
-    strip.addView(outlineButton("SCENES") { detectScenes() }, buttonLp(64))
-    strip.addView(outlineButton("FONT") { importFont() }, buttonLp(52))
-    panel.addView(strip, LinearLayout.LayoutParams(-1, dp(34)))
+    val stripScroll = HorizontalScrollView(this).apply {
+    isHorizontalScrollBarEnabled = false
+}
+val strip = LinearLayout(this).apply {
+    orientation = LinearLayout.HORIZONTAL
+    gravity = Gravity.CENTER_VERTICAL
+    setPadding(dp(6), dp(3), dp(6), dp(3))
+}
+strip.addView(outlineButton("IMPORT") { pickMedia() }, buttonLp(64))
+strip.addView(outlineButton("AUDIO") { pickAudio() }, buttonLp(56))
+strip.addView(outlineButton("IMAGE") { pickImage() }, buttonLp(56))
+strip.addView(outlineButton("ADD") { addSelectedAssetToTimeline() }, buttonLp(52))
+strip.addView(outlineButton("BEATS") { analyzeBeats() }, buttonLp(58))
+strip.addView(outlineButton("SCENES") { detectScenes() }, buttonLp(64))
+strip.addView(outlineButton("FONT") { importFont() }, buttonLp(52))
+stripScroll.addView(strip)
+panel.addView(stripScroll, LinearLayout.LayoutParams(-1, dp(34)))
     return panel
 }
 
@@ -393,7 +405,15 @@ private fun switchPage(page: String) {
         "DELIVER" -> selectTool("DELIVER")
     }
 }
+private fun toggleLeftPanel() {
+    leftPanel.visibility = if (leftPanel.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+    if (leftPanel.visibility == View.VISIBLE) rightPanel.visibility = View.GONE
+}
 
+private fun toggleRightPanel() {
+    rightPanel.visibility = if (rightPanel.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+    if (rightPanel.visibility == View.VISIBLE) leftPanel.visibility = View.GONE
+}
 private fun selectTool(tool: String) {
     toolPanel.removeAllViews()
     when (tool) {
