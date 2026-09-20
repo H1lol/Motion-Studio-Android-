@@ -952,9 +952,9 @@ class Biquad {
     ) {
         val f = frequencyHz.coerceIn(20f, sampleRate / 2f - 100f)
         val w0 = 2.0 * Math.PI * f / sampleRate
-        val cosW0 = Math.cos(w0)
-        val sinW0 = Math.sin(w0)
-        val alpha = sinW0 / (2.0 * q)
+        val cosW0 = Math.cos(w0).toFloat()
+        val sinW0 = Math.sin(w0).toFloat()
+        val alpha = sinW0 / (2f * q)
 
         val A = Math.pow(10.0, (gainDb / 40.0)).toFloat()
 
@@ -965,7 +965,7 @@ class Biquad {
             Type.LOW_SHELF -> {
                 val S = 1f
                 val beta = sinW0 * Math.sqrt((A * A + 1.0) / S - (A - 1.0) * (A - 1.0)).toFloat()
-                val twoSqrtAAlpha = 2f * Math.sqrt(A) * alpha
+                val twoSqrtAAlpha = 2f * Math.sqrt(A.toDouble()).toFloat() * alpha
                 b0p = A * ((A + 1f) - (A - 1f) * cosW0 + twoSqrtAAlpha).toFloat()
                 b1p = 2f * A * ((A - 1f) - (A + 1f) * cosW0).toFloat()
                 b2p = A * ((A + 1f) - (A - 1f) * cosW0 - twoSqrtAAlpha).toFloat()
@@ -975,7 +975,7 @@ class Biquad {
             }
             Type.HIGH_SHELF -> {
                 val S = 1f
-                val twoSqrtAAlpha = 2f * Math.sqrt(A) * alpha
+                val twoSqrtAAlpha = 2f * Math.sqrt(A.toDouble()).toFloat() * alpha
                 val beta = sinW0 * Math.sqrt((A * A + 1.0) / S - (A - 1.0) * (A - 1.0)).toFloat()
                 b0p = A * ((A + 1f) + (A - 1f) * cosW0 + twoSqrtAAlpha).toFloat()
                 b1p = -2f * A * ((A - 1f) + (A + 1f) * cosW0)
