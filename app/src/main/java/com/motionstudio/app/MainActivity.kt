@@ -4,7 +4,6 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.ActivityInfo
-import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Typeface
 import android.net.Uri
@@ -15,7 +14,6 @@ import android.os.Looper
 import android.text.InputType
 import android.view.Gravity
 import android.view.View
-import android.view.ViewGroup
 import android.view.Window
 import android.view.WindowInsets
 import android.view.WindowInsetsController
@@ -30,7 +28,6 @@ import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
-import java.io.File
 import java.util.Locale
 import java.util.concurrent.Executors
 
@@ -68,13 +65,14 @@ class MainActivity : Activity(), TimelineHost {
     private val ui = Handler(Looper.getMainLooper())
 
     // -------------------------------------------------------------------------
-    // Project state (single source of truth — see flaw fix group D)
+    // Project state (single source of truth)
     // -------------------------------------------------------------------------
     private val state = ProjectState()
 
     private var pipelineMode: ProModeBlock.PipelineMode = ProModeBlock.PipelineMode.CONSUMER
     private var currentPage: String = "EDIT"
     private var selectedClipIds: MutableSet<Long> = mutableSetOf()
+    private var selectedAssetId: Long? = null
 
     private val fontManager: FontManager by lazy { FontManager(this) }
     private val serializer: ProjectSerializer by lazy { ProjectSerializer(this) }
@@ -98,9 +96,6 @@ class MainActivity : Activity(), TimelineHost {
     private lateinit var nodeOverlay: FrameLayout
     private lateinit var scene3DOverlay: FrameLayout
 
-    private var previewImage: ImageView? = null
-    private var previewView: View? = null
-
     // -------------------------------------------------------------------------
     // Lifecycle
     // -------------------------------------------------------------------------
@@ -115,6 +110,21 @@ class MainActivity : Activity(), TimelineHost {
         AiRuntime.initialize(this)
 
         buildUi()
+
+        // Wire 1: register as a listener so state changes refresh the UI
+        state.addListener(object : ProjectState.Listener {
+            override fun onProjectChanged() {
+                refreshInspector()
+                if (::timelineView.isInitialized) timelineView.invalidateForProjectChange()
+            }
+        })
+
+        // Wire 2: assign the serializer codec so undo/redo works
+        state.codec = object : ProjectState.SnapshotCodec {
+            override fun encode(state: ProjectState) = serializer.serialize(state)
+            override fun decode(json: String, into: ProjectState) =
+                serializer.deserialize(json, into)
+        }
     }
 
     override fun onResume() { super.onResume(); goImmersive() }
@@ -126,7 +136,8 @@ class MainActivity : Activity(), TimelineHost {
             window.setDecorFitsSystemWindows(false)
             window.insetsController?.let {
                 it.hide(WindowInsets.Type.systemBars())
-                it.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                it.systemBarsBehavior =
+                    WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             }
         } else {
             @Suppress("DEPRECATION")
@@ -191,7 +202,6 @@ class MainActivity : Activity(), TimelineHost {
         switchPage("EDIT")
     }
 
-    // -------------------------------------------------------------------------
     private fun buildTopBar(): LinearLayout {
         val bar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -219,264 +229,269 @@ class MainActivity : Activity(), TimelineHost {
         bar.addView(outlineButton("RENDER") { renderCurrent() }, buttonLp(72))
         return bar
     }
-
-    // -------------------------------------------------------------------------
     private fun buildLeftPanel() {
-        leftPanel.removeAllViews()
+    leftPanel.removeAllViews()
 
-        val tabs = HorizontalScrollView(this).apply {
-            isHorizontalScrollBarEnabled = false
-        }
-        val tabRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        tabs.addView(tabRow)
-        listOf("MEDIA", "EDIT", "FX", "AI", "AUDIO", "COLOR", "3D").forEach { tab ->
-            tabRow.addView(outlineButton(tab) { selectTool(tab) }, buttonLp(72))
-        }
-        leftPanel.addView(tabs, LinearLayout.LayoutParams(-1, dp(36)))
-        leftPanel.addView(headerLabel("TOOLS"), LinearLayout.LayoutParams(-1, dp(24)))
+    val tabs = HorizontalScrollView(this).apply {
+        isHorizontalScrollBarEnabled = false
+    }
+    val tabRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+    tabs.addView(tabRow)
+    listOf("MEDIA", "EDIT", "FX", "AI", "AUDIO", "COLOR", "3D").forEach { tab ->
+        tabRow.addView(outlineButton(tab) { selectTool(tab) }, buttonLp(72))
+    }
+    leftPanel.addView(tabs, LinearLayout.LayoutParams(-1, dp(36)))
+    leftPanel.addView(headerLabel("TOOLS"), LinearLayout.LayoutParams(-1, dp(24)))
 
-        toolPanel = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(6), dp(4), dp(6), dp(8))
-        }
-        val scroll = ScrollView(this).apply { isFillViewport = true }
-        scroll.addView(toolPanel)
-        leftPanel.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+    toolPanel = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(dp(6), dp(4), dp(6), dp(8))
+    }
+    val scroll = ScrollView(this).apply { isFillViewport = true }
+    scroll.addView(toolPanel)
+    leftPanel.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+}
+
+private fun buildCenterPanel() {
+    centerPanel.removeAllViews()
+    viewerFrame = FrameLayout(this).apply { setBackgroundColor(BLACK) }
+    centerPanel.addView(viewerFrame, LinearLayout.LayoutParams(-1, 0, 1f))
+
+    // Wire 6: mount the GL viewer
+    val glView = android.opengl.GLSurfaceView(this).apply {
+        setEGLContextClientVersion(2)
+        setRenderer(GlEffectRenderer(this@MainActivity, state))
+        renderMode = android.opengl.GLSurfaceView.RENDERMODE_CONTINUOUSLY
+        preserveEGLContextOnPause = true
+    }
+    viewerFrame.addView(glView, FrameLayout.LayoutParams(-1, -1))
+
+    val hud = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(8), dp(4), dp(8), dp(4))
+    }
+    viewerFrame.addView(hud, FrameLayout.LayoutParams(-1, dp(32), Gravity.TOP))
+    hud.addView(textLabel("VIEWER", 9f).apply { typeface = Typeface.DEFAULT_BOLD },
+        LinearLayout.LayoutParams(0, -1, 1f))
+    hud.addView(outlineButton("FIT") { fitViewer() }, buttonLp(52))
+    hud.addView(outlineButton("1:1") { resetViewer() }, buttonLp(52))
+
+    val transport = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(6), dp(4), dp(6), dp(4))
+    }
+    centerPanel.addView(transport, LinearLayout.LayoutParams(-1, dp(44)))
+    transport.addView(outlineButton("|<") { timelineView.jumpToPrevEdit() }, buttonLp(48))
+    transport.addView(outlineButton("PLAY") { togglePlayback() }, buttonLp(64))
+    transport.addView(outlineButton(">|") { timelineView.jumpToNextEdit() }, buttonLp(48))
+    transport.addView(outlineButton("MARK") { timelineView.addUserMarker() }, buttonLp(60))
+    transport.addView(outlineButton("UNDO") { undo() }, buttonLp(60))
+    transport.addView(outlineButton("REDO") { redo() }, buttonLp(60))
+}
+
+private fun buildRightPanel() {
+    rightPanel.removeAllViews()
+    rightPanel.addView(headerLabel("INSPECTOR"), LinearLayout.LayoutParams(-1, dp(24)))
+    inspectorScroll = ScrollView(this).apply { setBackgroundColor(BLACK) }
+    inspectorBody = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(dp(8), dp(4), dp(8), dp(12))
+    }
+    inspectorScroll.addView(inspectorBody)
+    rightPanel.addView(inspectorScroll, LinearLayout.LayoutParams(-1, 0, 1f))
+    refreshInspector()
+}
+
+private fun buildTimelinePanel(): LinearLayout {
+    val panel = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setBackgroundColor(BLACK)
     }
 
-    // -------------------------------------------------------------------------
-    private fun buildCenterPanel() {
-        centerPanel.removeAllViews()
-        viewerFrame = FrameLayout(this).apply { setBackgroundColor(BLACK) }
-        centerPanel.addView(viewerFrame, LinearLayout.LayoutParams(-1, 0, 1f))
-
-        val hud = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(8), dp(4), dp(8), dp(4))
-        }
-        viewerFrame.addView(hud, FrameLayout.LayoutParams(-1, dp(32), Gravity.TOP))
-        hud.addView(textLabel("VIEWER", 9f).apply { typeface = Typeface.DEFAULT_BOLD },
-            LinearLayout.LayoutParams(0, -1, 1f))
-        hud.addView(outlineButton("FIT") { fitViewer() }, buttonLp(52))
-        hud.addView(outlineButton("1:1") { resetViewer() }, buttonLp(52))
-
-        val transport = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(6), dp(4), dp(6), dp(4))
-        }
-        centerPanel.addView(transport, LinearLayout.LayoutParams(-1, dp(44)))
-        transport.addView(outlineButton("|<") { timelineView.jumpToPrevEdit() }, buttonLp(48))
-        transport.addView(outlineButton("PLAY") { togglePlayback() }, buttonLp(64))
-        transport.addView(outlineButton(">|") { timelineView.jumpToNextEdit() }, buttonLp(48))
-        transport.addView(outlineButton("MARK") { timelineView.addUserMarker() }, buttonLp(60))
-        transport.addView(outlineButton("UNDO") { undo() }, buttonLp(60))
-        transport.addView(outlineButton("REDO") { redo() }, buttonLp(60))
+    timelineScroll = HorizontalScrollView(this).apply {
+        isHorizontalScrollBarEnabled = false
     }
+    timelineView = TimelineView(this, this)
+    timelineScroll.addView(timelineView, HorizontalScrollView.LayoutParams(-2, -1))
+    panel.addView(timelineScroll, LinearLayout.LayoutParams(-1, 0, 1f))
 
-    // -------------------------------------------------------------------------
-    private fun buildRightPanel() {
-        rightPanel.removeAllViews()
-        rightPanel.addView(headerLabel("INSPECTOR"), LinearLayout.LayoutParams(-1, dp(24)))
-        inspectorScroll = ScrollView(this).apply { setBackgroundColor(BLACK) }
-        inspectorBody = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(8), dp(4), dp(8), dp(12))
-        }
-        inspectorScroll.addView(inspectorBody)
-        rightPanel.addView(inspectorScroll, LinearLayout.LayoutParams(-1, 0, 1f))
-        refreshInspector()
+    val strip = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(6), dp(3), dp(6), dp(3))
     }
+    strip.addView(outlineButton("IMPORT") { pickMedia() }, buttonLp(64))
+    strip.addView(outlineButton("AUDIO") { pickAudio() }, buttonLp(56))
+    strip.addView(outlineButton("IMAGE") { pickImage() }, buttonLp(56))
+    strip.addView(outlineButton("ADD") { addSelectedAssetToTimeline() }, buttonLp(52))
+    strip.addView(outlineButton("BEATS") { analyzeBeats() }, buttonLp(58))
+    strip.addView(outlineButton("SCENES") { detectScenes() }, buttonLp(64))
+    strip.addView(outlineButton("FONT") { importFont() }, buttonLp(52))
+    panel.addView(strip, LinearLayout.LayoutParams(-1, dp(34)))
+    return panel
+}
 
-    // -------------------------------------------------------------------------
-    private fun buildTimelinePanel(): LinearLayout {
-        val panel = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(BLACK)
-        }
-
-        timelineScroll = HorizontalScrollView(this).apply {
-            isHorizontalScrollBarEnabled = false
-        }
-        timelineView = TimelineView(this, this)
-        timelineScroll.addView(timelineView, HorizontalScrollView.LayoutParams(-2, -1))
-        panel.addView(timelineScroll, LinearLayout.LayoutParams(-1, 0, 1f))
-
-        val strip = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(6), dp(3), dp(6), dp(3))
-        }
-        strip.addView(outlineButton("IMPORT") { pickMedia() }, buttonLp(64))
-        strip.addView(outlineButton("AUDIO") { pickAudio() }, buttonLp(56))
-        strip.addView(outlineButton("IMAGE") { pickImage() }, buttonLp(56))
-        strip.addView(outlineButton("ADD") { addSelectedAssetToTimeline() }, buttonLp(52))
-        strip.addView(outlineButton("BEATS") { analyzeBeats() }, buttonLp(58))
-        strip.addView(outlineButton("SCENES") { detectScenes() }, buttonLp(64))
-        strip.addView(outlineButton("FONT") { importFont() }, buttonLp(52))
-        panel.addView(strip, LinearLayout.LayoutParams(-1, dp(34)))
-        return panel
+private fun buildNodeOverlay() {
+    nodeOverlay = FrameLayout(this).apply {
+        setBackgroundColor(BLACK)
+        visibility = View.GONE
     }
-
-    // -------------------------------------------------------------------------
-    private fun buildNodeOverlay() {
-        nodeOverlay = FrameLayout(this).apply {
-            setBackgroundColor(BLACK)
-            visibility = View.GONE
-        }
-        root.addView(nodeOverlay, FrameLayout.LayoutParams(-1, -1))
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(8), 0, dp(8), 0)
-        }
-        header.addView(textLabel("NODE GRAPH", 11f).apply { typeface = Typeface.DEFAULT_BOLD },
-            LinearLayout.LayoutParams(0, -1, 1f))
-        header.addView(outlineButton("CLOSE") { closeNodes() }, buttonLp(64))
-        nodeOverlay.addView(header, FrameLayout.LayoutParams(-1, dp(40)))
-        val graphView = View(this).apply { setBackgroundColor(BLACK) }
-        nodeOverlay.addView(graphView, FrameLayout.LayoutParams(-1, -1).apply { topMargin = dp(40) })
+    root.addView(nodeOverlay, FrameLayout.LayoutParams(-1, -1))
+    val header = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(8), 0, dp(8), 0)
     }
+    header.addView(
+        textLabel("NODE GRAPH", 11f).apply { typeface = Typeface.DEFAULT_BOLD },
+        LinearLayout.LayoutParams(0, -1, 1f)
+    )
+    header.addView(outlineButton("CLOSE") { closeNodes() }, buttonLp(64))
+    nodeOverlay.addView(header, FrameLayout.LayoutParams(-1, dp(40)))
+    val graphView = View(this).apply { setBackgroundColor(BLACK) }
+    nodeOverlay.addView(graphView, FrameLayout.LayoutParams(-1, -1).apply { topMargin = dp(40) })
+}
 
-    // -------------------------------------------------------------------------
-    private fun build3DOverlay() {
-        scene3DOverlay = FrameLayout(this).apply {
-            setBackgroundColor(BLACK)
-            visibility = View.GONE
-        }
-        root.addView(scene3DOverlay, FrameLayout.LayoutParams(-1, -1))
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(8), 0, dp(8), 0)
-        }
-        header.addView(textLabel("3D SCENE", 11f).apply { typeface = Typeface.DEFAULT_BOLD },
-            LinearLayout.LayoutParams(0, -1, 1f))
-        header.addView(outlineButton("CLOSE") { close3D() }, buttonLp(64))
-        scene3DOverlay.addView(header, FrameLayout.LayoutParams(-1, dp(40)))
+private fun build3DOverlay() {
+    scene3DOverlay = FrameLayout(this).apply {
+        setBackgroundColor(BLACK)
+        visibility = View.GONE
     }
-
-    // =========================================================================
-    // Page switching
-    // =========================================================================
-    private fun switchPage(page: String) {
-        currentPage = page
-        closeNodes(); close3D()
-        when (page) {
-            "EDIT" -> selectTool("EDIT")
-            "TEXT" -> selectTool("TEXT")
-            "FX" -> selectTool("FX")
-            "NODES" -> openNodes()
-            "3D" -> open3D()
-            "DELIVER" -> selectTool("DELIVER")
-        }
+    root.addView(scene3DOverlay, FrameLayout.LayoutParams(-1, -1))
+    val header = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(8), 0, dp(8), 0)
     }
+    header.addView(
+        textLabel("3D SCENE", 11f).apply { typeface = Typeface.DEFAULT_BOLD },
+        LinearLayout.LayoutParams(0, -1, 1f)
+    )
+    header.addView(outlineButton("CLOSE") { close3D() }, buttonLp(64))
+    scene3DOverlay.addView(header, FrameLayout.LayoutParams(-1, dp(40)))
+}
+// =========================================================================
+// Page switching
+// =========================================================================
+private fun switchPage(page: String) {
+    currentPage = page
+    closeNodes(); close3D()
+    when (page) {
+        "EDIT" -> selectTool("EDIT")
+        "TEXT" -> selectTool("TEXT")
+        "FX" -> selectTool("FX")
+        "NODES" -> openNodes()
+        "3D" -> open3D()
+        "DELIVER" -> selectTool("DELIVER")
+    }
+}
 
-    private fun selectTool(tool: String) {
-        toolPanel.removeAllViews()
-        when (tool) {
-            "MEDIA" -> buildMediaTools()
-            "EDIT" -> buildEditTools()
-            "FX" -> buildFxTools()
-            "AI" -> buildAiTools()
-            "AUDIO" -> buildAudioTools()
-            "COLOR" -> buildColorTools()
-            "TEXT" -> buildTextTools()
-            "DELIVER" -> buildDeliverTools()
+private fun selectTool(tool: String) {
+    toolPanel.removeAllViews()
+    when (tool) {
+        "MEDIA" -> buildMediaTools()
+        "EDIT" -> buildEditTools()
+        "FX" -> buildFxTools()
+        "AI" -> buildAiTools()
+        "AUDIO" -> buildAudioTools()
+        "COLOR" -> buildColorTools()
+        "TEXT" -> buildTextTools()
+        "DELIVER" -> buildDeliverTools()
+    }
+}
+
+// =========================================================================
+// Tool panels
+// =========================================================================
+private fun buildMediaTools() {
+    addTool("IMPORT MEDIA") { pickMedia() }
+    addTool("IMPORT PHOTOS") { pickImage() }
+    addTool("IMPORT MUSIC") { pickAudio() }
+    addTool("IMPORT FONT") { importFont() }
+    addTool("ADD TO TIMELINE") { addSelectedAssetToTimeline() }
+    addHeader("MEDIA BIN")
+    state.assets.forEach { asset ->
+        addTool(asset.name.take(24)) { selectAsset(asset.id) }
+    }
+}
+
+private fun buildEditTools() {
+    addTool("ADD TEXT") { addTextLayer() }
+    addTool("ADD SHAPE") { addShapeLayer() }
+    addTool("SPLIT AT PLAYHEAD") { splitSelected() }
+    addTool("SET IN") { setInAtPlayhead() }
+    addTool("SET OUT") { setOutAtPlayhead() }
+    addTool("DUPLICATE") { duplicateSelected() }
+    addTool("DELETE") { timelineView.deleteSelection(ripple = false) }
+    addTool("RIPPLE DELETE") { timelineView.deleteSelection(ripple = true) }
+    addTool("ADD KEYFRAME") { addKeyframeToSelected() }
+    addTool("CLEAR KEYFRAMES") { clearKeyframes() }
+    addTool("SELECT ALL") { timelineView.selectAll() }
+    addTool("CLEAR SELECTION") { timelineView.clearSelection() }
+}
+
+private fun buildFxTools() {
+    addHeader("EFFECTS (${EffectRegistry.COUNT})")
+    EffectRegistry.ALL.groupBy { it.category }.forEach { (category, effects) ->
+        addHeader(category)
+        effects.forEach { def ->
+            addTool(def.name) { applyEffect(def.name) }
         }
     }
+}
 
-    // =========================================================================
-    // Tool panels
-    // =========================================================================
-    private fun buildMediaTools() {
-        addTool("IMPORT MEDIA") { pickMedia() }
-        addTool("IMPORT PHOTOS") { pickImage() }
-        addTool("IMPORT MUSIC") { pickAudio() }
-        addTool("IMPORT FONT") { importFont() }
-        addTool("ADD TO TIMELINE") { addSelectedAssetToTimeline() }
-        addHeader("MEDIA BIN")
-        state.assets.forEach { asset ->
-            addTool(asset.name.take(24)) { selectAsset(asset.id) }
+private fun buildAiTools() {
+    addHeader("AI")
+    AiRuntime.capabilities().forEach { cap ->
+        val label = if (cap.available) cap.name else "🔒 ${cap.name}"
+        addTool(label) {
+            if (cap.available) runAiCapability(cap)
+            else toast("${cap.name}: ${cap.reason}")
         }
     }
+}
 
-    private fun buildEditTools() {
-        addTool("ADD TEXT") { addTextLayer() }
-        addTool("ADD SHAPE") { addShapeLayer() }
-        addTool("SPLIT AT PLAYHEAD") { splitSelected() }
-        addTool("SET IN") { setInAtPlayhead() }
-        addTool("SET OUT") { setOutAtPlayhead() }
-        addTool("DUPLICATE") { duplicateSelected() }
-        addTool("DELETE") { timelineView.deleteSelection(ripple = false) }
-        addTool("RIPPLE DELETE") { timelineView.deleteSelection(ripple = true) }
-        addTool("ADD KEYFRAME") { addKeyframeToSelected() }
-        addTool("CLEAR KEYFRAMES") { clearKeyframes() }
-        addTool("SELECT ALL") { timelineView.selectAll() }
-        addTool("CLEAR SELECTION") { timelineView.clearSelection() }
-    }
+private fun buildAudioTools() {
+    addTool("IMPORT MUSIC") { pickAudio() }
+    addTool("BEAT SCAN") { analyzeBeats() }
+    addTool("AUTO CUT ON BEATS") { cutOnBeats() }
+    addTool("VOLUME +") { adjustVolume(0.1f) }
+    addTool("VOLUME −") { adjustVolume(-0.1f) }
+    addTool("MUTE") { toggleMute() }
+}
 
-    private fun buildFxTools() {
-        addHeader("EFFECTS (${EffectRegistry.COUNT})")
-        EffectRegistry.ALL.groupBy { it.category }.forEach { (category, effects) ->
-            addHeader(category)
-            effects.forEach { def ->
-                addTool(def.name) { applyEffect(def.name) }
-            }
+private fun buildColorTools() {
+    addTool("NORMAL") { setColorMode("NORMAL") }
+    addTool("B&W") { setColorMode("BW") }
+    addTool("INVERT") { setColorMode("INVERT") }
+    addTool("ADD VIGNETTE") { applyEffect("Vignette") }
+    addTool("ADD FILM GRAIN") { applyEffect("Film Grain") }
+    addTool("ADD CHROMA ABERRATION") { applyEffect("Chroma Shift") }
+}
+
+private fun buildTextTools() {
+    addTool("ADD TEXT LAYER") { addTextLayer() }
+    addHeader("ANIMATION PRESETS")
+    TextAnimationRegistry.ALL.forEach { preset ->
+        addTool(preset.name) {
+            selectedTextLayer()?.let {
+                it.preset = preset.name
+                toast("Preset: ${preset.name}")
+            } ?: toast("Select a text layer first")
         }
     }
+}
 
-    private fun buildAiTools() {
-        addHeader("AI")
-        AiRuntime.capabilities().forEach { cap ->
-            val label = if (cap.available) cap.name else "🔒 ${cap.name}"
-            addTool(label) {
-                if (cap.available) runAiCapability(cap)
-                else toast("${cap.name}: ${cap.reason}")
-            }
-        }
-    }
-
-    private fun buildAudioTools() {
-        addTool("IMPORT MUSIC") { pickAudio() }
-        addTool("BEAT SCAN") { analyzeBeats() }
-        addTool("AUTO CUT ON BEATS") { cutOnBeats() }
-        addTool("VOLUME +") { adjustVolume(0.1f) }
-        addTool("VOLUME −") { adjustVolume(-0.1f) }
-        addTool("MUTE") { toggleMute() }
-    }
-
-    private fun buildColorTools() {
-        addTool("NORMAL") { setColorMode("NORMAL") }
-        addTool("B&W") { setColorMode("BW") }
-        addTool("INVERT") { setColorMode("INVERT") }
-        addTool("ADD VIGNETTE") { applyEffect("Vignette") }
-        addTool("ADD FILM GRAIN") { applyEffect("Film Grain") }
-        addTool("ADD CHROMA ABERRATION") { applyEffect("Chroma Shift") }
-    }
-
-    private fun buildTextTools() {
-        addTool("ADD TEXT LAYER") { addTextLayer() }
-        addHeader("ANIMATION PRESETS")
-        TextAnimationRegistry.ALL.forEach { preset ->
-            addTool(preset.name) {
-                selectedTextLayer()?.let {
-                    it.preset = preset.name
-                    toast("Preset: ${preset.name}")
-                } ?: toast("Select a text layer first")
-            }
-        }
-    }
-
-    private fun buildDeliverTools() {
-        addTool("EXPORT VIDEO") { renderCurrent() }
-        addTool("SAVE PROJECT") { saveProject() }
-        addTool("OPEN PROJECT") { openProject() }
-        addHeader("STATUS")
-        addTool("Pipeline: ${ProModeBlock.statusLabel()}") {}
-    }
-    // =========================================================================
+private fun buildDeliverTools() {
+    addTool("EXPORT VIDEO") { renderCurrent() }
+    addTool("SAVE PROJECT") { saveProject() }
+    addTool("OPEN PROJECT") { openProject() }
+    addHeader("STATUS")
+    addTool("Pipeline: ${ProModeBlock.statusLabel()}") {}
+}
+// =========================================================================
 // TimelineHost implementation — the contract with Timeline.kt
 // =========================================================================
 
@@ -611,7 +626,10 @@ private fun launchPicker(req: Int, mime: String) {
     val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
         addCategory(Intent.CATEGORY_OPENABLE)
         type = mime
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+        addFlags(
+            Intent.FLAG_GRANT_READ_URI_PERMISSION or
+            Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+        )
     }
     startActivityForResult(intent, req)
 }
@@ -632,7 +650,9 @@ override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) 
 
 private fun importAsset(uri: Uri) {
     try {
-        contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        contentResolver.takePersistableUriPermission(
+            uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+        )
     } catch (_: Throwable) {}
     executor.execute {
         val kind = MediaImporter.detectKind(this, uri)
@@ -647,7 +667,6 @@ private fun importAsset(uri: Uri) {
         }
     }
 }
-
 // =========================================================================
 // Playback
 // =========================================================================
@@ -674,10 +693,13 @@ private fun newProject() {
 }
 
 private fun openProject() {
-    startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-        addCategory(Intent.CATEGORY_OPENABLE)
-        type = "application/json"
-    }, REQ_PROJECT_OPEN)
+    startActivityForResult(
+        Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/json"
+        },
+        REQ_PROJECT_OPEN
+    )
 }
 
 private fun openProjectFrom(uri: Uri) {
@@ -699,11 +721,14 @@ private fun openProjectFrom(uri: Uri) {
 }
 
 private fun saveProject() {
-    startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-        addCategory(Intent.CATEGORY_OPENABLE)
-        type = "application/json"
-        putExtra(Intent.EXTRA_TITLE, "MotionStudio_Project.json")
-    }, REQ_PROJECT_SAVE)
+    startActivityForResult(
+        Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/json"
+            putExtra(Intent.EXTRA_TITLE, "MotionStudio_Project.json")
+        },
+        REQ_PROJECT_SAVE
+    )
 }
 
 private fun saveProjectTo(uri: Uri) {
@@ -717,110 +742,122 @@ private fun saveProjectTo(uri: Uri) {
         }
     }
 }
-    // =========================================================================
-    // Inspector
-    // =========================================================================
-    private fun refreshInspector() {
-        inspectorBody.removeAllViews()
-        val selected = state.layers.firstOrNull { it.id in selectedClipIds }
-        if (selected != null) buildLayerInspector(selected)
-        val textLayer = state.textLayers.firstOrNull { it.id in selectedClipIds }
-        if (textLayer != null) buildTextInspector(textLayer)
-        if (selected == null && textLayer == null) {
-            inspectorBody.addView(textLabel("Select a clip or text layer", 10f).apply {
-                setTextColor(GRAY); setPadding(0, dp(12), 0, 0)
-            })
-        }
-    }
 
-    private fun buildLayerInspector(layer: Layer2D) {
-        inspectorBody.addView(headerLabel("LAYER ${layer.id}"), LinearLayout.LayoutParams(-1, dp(24)))
-        inspectorBody.addView(seekRow("SPEED", 25, 400, (layer.speed * 100).toInt()) {
-            layer.speed = it / 100f
-            timelineView.invalidate()
-        })
-        inspectorBody.addView(seekRow("VOLUME", 0, 200, (layer.volume * 100).toInt()) {
-            layer.volume = it / 100f
-        })
-        inspectorBody.addView(headerLabel("TRANSFORM KEYS"), LinearLayout.LayoutParams(-1, dp(24)))
-        layer.props.forEach { (channel, track) ->
-            inspectorBody.addView(propertyRow(layer.id, channel, track))
-        }
-        if (layer.effects.isNotEmpty()) {
-            inspectorBody.addView(headerLabel("EFFECTS"), LinearLayout.LayoutParams(-1, dp(24)))
-            layer.effects.forEach { fx ->
-                val row = LinearLayout(this).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.CENTER_VERTICAL
-                }
-                row.addView(textLabel(fx.type, 10f), LinearLayout.LayoutParams(0, -1, 1f))
-                row.addView(outlineButton("X") {
-                    mutate { layer.effects.remove(fx) }
-                }, buttonLp(36))
-                inspectorBody.addView(row, LinearLayout.LayoutParams(-1, dp(32)))
+// =========================================================================
+// Inspector
+// =========================================================================
+private fun refreshInspector() {
+    inspectorBody.removeAllViews()
+    val selected = state.layers.firstOrNull { it.id in selectedClipIds }
+    if (selected != null) buildLayerInspector(selected)
+    val textLayer = state.textLayers.firstOrNull { it.id in selectedClipIds }
+    if (textLayer != null) buildTextInspector(textLayer)
+    if (selected == null && textLayer == null) {
+        inspectorBody.addView(
+            textLabel("Select a clip or text layer", 10f).apply {
+                setTextColor(GRAY)
+                setPadding(0, dp(12), 0, 0)
             }
-        }
+        )
     }
+}
 
-    private fun buildTextInspector(tl: TextLayer) {
-        inspectorBody.addView(headerLabel("TEXT LAYER"), LinearLayout.LayoutParams(-1, dp(24)))
-        inspectorBody.addView(outlineButton("EDIT TEXT") { promptTextEdit(tl) }, fillLp())
-        inspectorBody.addView(seekRow("SIZE", 12, 300, tl.fontSize.toInt()) {
-            tl.fontSize = it.toFloat()
-        })
-        inspectorBody.addView(seekRow("TRACKING", -20, 40, tl.tracking.toInt()) {
-            tl.tracking = it.toFloat()
-        })
-        inspectorBody.addView(headerLabel("PRESET"), LinearLayout.LayoutParams(-1, dp(24)))
-        TextAnimationRegistry.ALL.take(12).chunked(4).forEach { group ->
-            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            group.forEach { preset ->
-                row.addView(outlineButton(preset.name) {
-                    tl.preset = preset.name
-                }, LinearLayout.LayoutParams(0, dp(32), 1f))
+private fun buildLayerInspector(layer: Layer2D) {
+    inspectorBody.addView(
+        headerLabel("LAYER ${layer.id}"),
+        LinearLayout.LayoutParams(-1, dp(24))
+    )
+    inspectorBody.addView(seekRow("SPEED", 25, 400, (layer.speed * 100).toInt()) {
+        layer.speed = it / 100f
+        timelineView.invalidate()
+    })
+    inspectorBody.addView(seekRow("VOLUME", 0, 200, (layer.volume * 100).toInt()) {
+        layer.volume = it / 100f
+    })
+    inspectorBody.addView(
+        headerLabel("TRANSFORM KEYS"),
+        LinearLayout.LayoutParams(-1, dp(24))
+    )
+    layer.props.forEach { (channel, track) ->
+        inspectorBody.addView(propertyRow(layer.id, channel, track))
+    }
+    if (layer.effects.isNotEmpty()) {
+        inspectorBody.addView(headerLabel("EFFECTS"), LinearLayout.LayoutParams(-1, dp(24)))
+        layer.effects.forEach { fx ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
             }
-            inspectorBody.addView(row, LinearLayout.LayoutParams(-1, dp(34)))
+            row.addView(textLabel(fx.type, 10f), LinearLayout.LayoutParams(0, -1, 1f))
+            row.addView(outlineButton("X") {
+                mutate { layer.effects.remove(fx) }
+            }, buttonLp(36))
+            inspectorBody.addView(row, LinearLayout.LayoutParams(-1, dp(32)))
         }
     }
+}
 
-    private fun propertyRow(layerId: Long, channel: String, track: PropertyTrack): View {
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+private fun buildTextInspector(tl: TextLayer) {
+    inspectorBody.addView(headerLabel("TEXT LAYER"), LinearLayout.LayoutParams(-1, dp(24)))
+    inspectorBody.addView(outlineButton("EDIT TEXT") { promptTextEdit(tl) }, fillLp())
+    inspectorBody.addView(seekRow("SIZE", 12, 300, tl.fontSize.toInt()) {
+        tl.fontSize = it.toFloat()
+    })
+    inspectorBody.addView(seekRow("TRACKING", -20, 40, tl.tracking.toInt()) {
+        tl.tracking = it.toFloat()
+    })
+    inspectorBody.addView(headerLabel("PRESET"), LinearLayout.LayoutParams(-1, dp(24)))
+    TextAnimationRegistry.ALL.take(12).chunked(4).forEach { group ->
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        group.forEach { preset ->
+            row.addView(
+                outlineButton(preset.name) { tl.preset = preset.name },
+                LinearLayout.LayoutParams(0, dp(32), 1f)
+            )
         }
-        row.addView(outlineButton("◆") {
-            mutate {
-                val exists = track.keys.firstOrNull {
+        inspectorBody.addView(row, LinearLayout.LayoutParams(-1, dp(34)))
+    }
+}
+
+private fun propertyRow(layerId: Long, channel: String, track: PropertyTrack): View {
+    val row = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+    }
+    row.addView(outlineButton("◆") {
+        mutate {
+            val exists = track.keys.firstOrNull {
+                Math.abs(it.timeMs - state.playheadMs) < 20
+            }
+            if (exists != null) track.keys.remove(exists)
+            else track.keys.add(Keyframe(state.playheadMs, track.sample(state.playheadMs)))
+        }
+        timelineView.invalidate()
+    }, buttonLp(30))
+    row.addView(
+        textLabel(channel.uppercase(Locale.US), 9f),
+        LinearLayout.LayoutParams(dp(60), -1)
+    )
+    val current = track.sample(state.playheadMs)
+    val sb = SeekBar(this).apply {
+        max = 400
+        progress = (current + 200).toInt().coerceIn(0, 400)
+        setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
+                if (!fromUser) return
+                val v = p - 200f
+                val key = track.keys.firstOrNull {
                     Math.abs(it.timeMs - state.playheadMs) < 20
                 }
-                if (exists != null) track.keys.remove(exists)
-                else track.keys.add(Keyframe(state.playheadMs, track.sample(state.playheadMs)))
+                if (key != null) key.value = v else track.baseValue = v
             }
-            timelineView.invalidate()
-        }, buttonLp(30))
-        row.addView(textLabel(channel.uppercase(Locale.US), 9f),
-            LinearLayout.LayoutParams(dp(60), -1))
-        val current = track.sample(state.playheadMs)
-        val sb = SeekBar(this).apply {
-            max = 400
-            progress = (current + 200).toInt().coerceIn(0, 400)
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
-                    if (!fromUser) return
-                    val v = p - 200f
-                    val key = track.keys.firstOrNull {
-                        Math.abs(it.timeMs - state.playheadMs) < 20
-                    }
-                    if (key != null) key.value = v else track.baseValue = v
-                }
-                override fun onStartTrackingTouch(s: SeekBar?) {}
-                override fun onStopTrackingTouch(s: SeekBar?) {}
-            })
-        }
-        row.addView(sb, LinearLayout.LayoutParams(0, dp(32), 1f))
-        return row
+            override fun onStartTrackingTouch(s: SeekBar?) {}
+            override fun onStopTrackingTouch(s: SeekBar?) {}
+        })
     }
-
+    row.addView(sb, LinearLayout.LayoutParams(0, dp(32), 1f))
+    return row
+}
     // =========================================================================
     // Text
     // =========================================================================
@@ -992,11 +1029,13 @@ private fun saveProjectTo(uri: Uri) {
     }
 
     private fun selectAsset(id: Long) {
-        toast("Selected asset $id")
+        selectedAssetId = id
+        state.assetById(id)?.let { toast("Selected: ${it.name}") }
     }
 
     private fun addSelectedAssetToTimeline() {
-        val asset = state.assets.lastOrNull()
+        val asset = selectedAssetId?.let { state.assetById(it) }
+            ?: state.assets.lastOrNull()
             ?: return toast("Import a media file first")
         mutate {
             val layer = Layer2D(
