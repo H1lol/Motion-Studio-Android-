@@ -313,7 +313,7 @@ private fun buildTimeline(): LinearLayout {
     }
     timelineView = TimelineView(this, this)
     timelineScroll.addView(timelineView,
-        HorizontalScrollView.LayoutParams(-2, -1))
+    FrameLayout.LayoutParams(-2, -1))
     panel.addView(timelineScroll, LinearLayout.LayoutParams(-1, 0, 1f))
 
     return panel
