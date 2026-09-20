@@ -1,40 +1,76 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="fr.natron.Natron">
+    xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Network access for plugins, Python packages and future functionality -->
+    <!-- ============================================================
+         Permissions
+         ============================================================ -->
+
+    <!-- Speech recognition for auto-captions (AiCaptionService) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- Internet — reserved for future cloud AI endpoints.
+         Remove if you never make network calls. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <!-- Audio/video/media access where required by Android versions -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <!-- Media read. The app uses SAF (ACTION_OPEN_DOCUMENT) which
+         grants per-file access without these, but declaring them lets
+         the file picker remember recent locations and supports
+         some providers that require explicit permission. -->
 
-    <!-- For older Android versions -->
+    <!-- Android 13+ (API 33) granular media permissions -->
+    <uses-permission
+        android:name="android.permission.READ_MEDIA_VIDEO"
+        tools:targetApi="33" />
+    <uses-permission
+        android:name="android.permission.READ_MEDIA_IMAGES"
+        tools:targetApi="33" />
+    <uses-permission
+        android:name="android.permission.READ_MEDIA_AUDIO"
+        tools:targetApi="33" />
+
+    <!-- Android 12 and below — legacy storage read -->
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
 
-    <uses-permission
-        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="28" />
+    <!-- ============================================================
+         Hardware features
+         ============================================================ -->
+
+    <!-- The renderer uses OpenGL ES 2.0. Every Android device since
+         2011 supports this, but declaring it filters the Play Store. -->
+    <uses-feature
+        android:glEsVersion="0x00020000"
+        android:required="true" />
+
+    <!-- Touch input is required; no stylus/mouse-only devices. -->
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="true" />
+
+    <!-- ============================================================
+         Application
+         ============================================================ -->
 
     <application
-        android:name=".NatronApplication"
         android:allowBackup="false"
         android:hardwareAccelerated="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="Natron"
+        android:label="@string/app_name"
         android:largeHeap="true"
-        android:resizeableActivity="true"
-        android:supportsRtl="true"
-        android:theme="@style/NatronTheme">
+        android:supportsRtl="false"
+        android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen"
+        tools:targetApi="34">
 
+        <!-- Main editor activity — the only screen in the app. -->
         <activity
             android:name=".MainActivity"
-            android:configChanges="orientation|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode"
             android:exported="true"
-            android:launchMode="singleTask"
+            android:launchMode="singleTop"
             android:screenOrientation="landscape"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode|density|fontScale"
+            android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen"
             android:windowSoftInputMode="adjustResize">
 
             <intent-filter>
@@ -42,49 +78,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Open Natron project files -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-
-                <data android:mimeType="application/x-natron" />
-                <data android:scheme="content" />
-                <data android:scheme="file" />
-            </intent-filter>
-
         </activity>
-
-        <!--
-             Qt Android deployment metadata.
-
-             The native library name will eventually correspond
-             to the Android-built Natron native library.
-        -->
-        <meta-data
-            android:name="android.app.lib_name"
-            android:value="Natron" />
-
-        <meta-data
-            android:name="android.app.bundle_local_qt_libs"
-            android:value="1" />
-
-        <meta-data
-            android:name="android.app.use_local_qt_libs"
-            android:value="1" />
-
-        <meta-data
-            android:name="android.app.qt_libs_resource_id"
-            android:resource="@array/qt_libs" />
-
-        <meta-data
-            android:name="android.app.qt_sources_resource_id"
-            android:resource="@array/qt_sources" />
-
-        <meta-data
-            android:name="android.app.qt_libs_prefix"
-            android:value="/data/local/tmp/qt" />
 
     </application>
 
