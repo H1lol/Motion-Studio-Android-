@@ -1,21 +1,19 @@
 plugins {
-    alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
 }
 
 android {
     namespace = "com.motionstudio.app"
-    compileSdk = 36
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.motionstudio.app"
         minSdk = 24
-        targetSdk = 36
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
 
-        // Your project uses OpenGL ES 2.0 + 3.0 features.
-        // ARM64 and ARMv7 cover every modern Android device.
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
         }
@@ -29,9 +27,6 @@ android {
                 "proguard-rules.pro",
             )
         }
-        debug {
-            isMinifyEnabled = false
-        }
     }
 
     compileOptions {
@@ -39,22 +34,13 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlin {
-        compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-        }
+    kotlinOptions {
+        jvmTarget = "17"
     }
 
     buildFeatures {
-        // Not using Compose — traditional Views only.
         compose = false
         buildConfig = true
-    }
-
-    // The project has no XML layouts — everything is built in Kotlin.
-    // Keep this false so resources aren't searched for at build time.
-    androidResources {
-        // Leave defaults; the manifest and mipmaps still get packaged.
     }
 
     packaging {
@@ -71,27 +57,17 @@ android {
 }
 
 dependencies {
-    // --- Kotlin + Coroutines ---
-    implementation(libs.kotlinx.coroutines.android)
-    implementation(libs.kotlinx.coroutines.play.services)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
 
-    // --- AndroidX (minimal — the app is Activity-based, not AppCompat) ---
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.activity)
-    implementation(libs.androidx.lifecycle.runtime)
+    implementation("androidx.core:core-ktx:1.15.0")
+    implementation("androidx.activity:activity:1.9.3")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
 
-    // --- ML Kit: on-device AI ---
-    // Each of these backs one feature in MotionStudioAiSuite.kt.
-    // Comment out any you don't want to ship — each one adds ~2-5 MB.
-    implementation(libs.mlkit.segmentation.selfie)     // Background removal
-    implementation(libs.mlkit.pose.detection.accurate) // Auto-reframe
-    implementation(libs.mlkit.object.detection)        // Object tracking
-    implementation(libs.mlkit.image.labeling)          // Content tagging
-    implementation(libs.mlkit.face.detection)          // Face boxes
-    implementation(libs.mlkit.text.recognition)        // OCR
-
-    // --- No media dependencies needed ---
-    // Video decoding uses android.media.MediaCodec from the framework.
-    // Audio uses android.media.MediaPlayer.
-    // No ExoPlayer, no Media3, no FFmpeg.
+    implementation("com.google.mlkit:segmentation-selfie:16.0.0-beta6")
+    implementation("com.google.mlkit:pose-detection-accurate:18.0.0-beta5")
+    implementation("com.google.mlkit:object-detection:17.0.2")
+    implementation("com.google.mlkit:image-labeling:17.0.9")
+    implementation("com.google.mlkit:face-detection:16.1.7")
+    implementation("com.google.mlkit:text-recognition:16.0.1")
 }
