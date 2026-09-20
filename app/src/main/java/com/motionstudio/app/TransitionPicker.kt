@@ -235,11 +235,11 @@ object TransitionPicker {
             setOnClickListener {
                 val idx = TransitionRegistry.ALL.indexOf(def)
                 onPicked(idx, def)
-                (wrapper.parent?.parent?.parent?.parent as? ViewGroup)?.let { root ->
+                (this.parent?.parent?.parent?.parent as? ViewGroup)?.let { root ->
                     // Climb up to the overlay and remove it
                 }
                 // Simpler: bubble up to find the overlay
-                var v: View? = wrapper
+                var v: View? = this
                 while (v != null) {
                     if (v is FrameLayout && v.parent is ViewGroup &&
                         (v.parent as ViewGroup).id == android.R.id.content) break
