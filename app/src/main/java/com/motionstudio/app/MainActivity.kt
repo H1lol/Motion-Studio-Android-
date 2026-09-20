@@ -73,7 +73,8 @@ class MainActivity : Activity(), TimelineHost {
     private var currentPage: String = "EDIT"
     private var selectedClipIds: MutableSet<Long> = mutableSetOf()
     private var selectedAssetId: Long? = null
-
+    private var glView: android.opengl.GLSurfaceView? = null
+    private var renderer: GlEffectRenderer? = null
     private val fontManager: FontManager by lazy { FontManager(this) }
     private val serializer: ProjectSerializer by lazy { ProjectSerializer(this) }
 
@@ -129,7 +130,11 @@ class MainActivity : Activity(), TimelineHost {
 
     override fun onResume() { super.onResume(); goImmersive() }
     override fun onPause() { super.onPause() }
-    override fun onDestroy() { executor.shutdownNow(); super.onDestroy() }
+    override fun onDestroy() {
+    renderer?.release()
+    executor.shutdownNow()
+    super.onDestroy()
+    }
 
     private fun goImmersive() {
         if (Build.VERSION.SDK_INT >= 30) {
@@ -258,14 +263,15 @@ private fun buildCenterPanel() {
     centerPanel.addView(viewerFrame, LinearLayout.LayoutParams(-1, 0, 1f))
 
     // Wire 6: mount the GL viewer
-    val glView = android.opengl.GLSurfaceView(this).apply {
-        setEGLContextClientVersion(2)
-        setRenderer(GlEffectRenderer(this@MainActivity, state))
-        renderMode = android.opengl.GLSurfaceView.RENDERMODE_CONTINUOUSLY
-        preserveEGLContextOnPause = true
-    }
-    viewerFrame.addView(glView, FrameLayout.LayoutParams(-1, -1))
-
+    val r = GlEffectRenderer(this, state)
+renderer = r
+glView = android.opengl.GLSurfaceView(this).apply {
+    setEGLContextClientVersion(2)
+    setRenderer(r)
+    renderMode = android.opengl.GLSurfaceView.RENDERMODE_CONTINUOUSLY
+    preserveEGLContextOnPause = true
+}
+viewerFrame.addView(glView, FrameLayout.LayoutParams(-1, -1))
     val hud = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
@@ -517,13 +523,14 @@ override fun mutate(block: () -> Unit) {
     state.notifyChanged()
     refreshInspector()
     timelineView.invalidateForProjectChange()
+    glView?.requestRender()
 }
-
 override fun setPlayhead(timeMs: Long) {
     state.playheadMs = timeMs.coerceAtLeast(0L)
     updatePlayheadUi()
+    renderer?.setPlayheadTime(state.playheadMs)
+    glView?.requestRender()
 }
-
 override fun setSelection(ids: Set<Long>) {
     selectedClipIds.clear()
     selectedClipIds.addAll(ids)
