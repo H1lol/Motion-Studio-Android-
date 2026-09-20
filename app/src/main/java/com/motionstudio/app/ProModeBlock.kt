@@ -303,7 +303,7 @@ object ProModeBlock {
         private fun getGlInfo(activity: Activity): Pair<Int, Int> {
             val am = activity.getSystemService(Context.ACTIVITY_SERVICE)
                 as android.app.ActivityManager
-            val version = am.deviceConfigurationInfo.glEsVersion
+            val version = am.deviceConfigurationInfo.reqGlEsVersion
             val major = (version shr 16) and 0xFFFF
             val minor = version and 0xFFFF
             return major to minor
