@@ -519,6 +519,18 @@ override fun onDraw(canvas: Canvas) {
 
     ensureLoadedAsync()
 }
+    if (autoScrollEnabled && host.isPlaying()) {
+        val px = msToX(host.playheadMs())
+        if (px < headerW() + dp(40f) || px > width - dp(80f)) {
+            panX = max(
+                0f,
+                msToXContent(host.playheadMs()) - width / 2f + headerW() / 2f
+            )
+        }
+    }
+
+    ensureLoadedAsync()
+}
 
     if (autoScrollEnabled && host.isPlaying()) {
         val px = msToX(host.playheadMs())
