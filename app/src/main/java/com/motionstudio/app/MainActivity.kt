@@ -74,7 +74,8 @@ class MainActivity : Activity(), TimelineHost {
 
     private var glView: android.opengl.GLSurfaceView? = null
     private var renderer: GlEffectRenderer? = null
-
+    private var playPauseButton: Button? = null
+    
     private val fontManager: FontManager by lazy { FontManager(this) }
     private val serializer: ProjectSerializer by lazy { ProjectSerializer(this) }
 
@@ -287,16 +288,25 @@ private fun buildTransport(): LinearLayout {
         setBackgroundColor(BLACK)
         setPadding(dp(6), 0, dp(6), 0)
     }
-    row.addView(outlineButton("UNDO") { undo() },
-        LinearLayout.LayoutParams(0, dp(34), 1f).apply { marginEnd = dp(3) })
-    row.addView(outlineButton("|<") { timelineView.jumpToPrevEdit() },
-        LinearLayout.LayoutParams(0, dp(34), 1f).apply { marginEnd = dp(3) })
-    row.addView(outlineButton("PLAY") { togglePlayback() },
-        LinearLayout.LayoutParams(0, dp(34), 2f).apply { marginEnd = dp(3) })
-    row.addView(outlineButton(">|") { timelineView.jumpToNextEdit() },
-        LinearLayout.LayoutParams(0, dp(34), 1f).apply { marginEnd = dp(3) })
-    row.addView(outlineButton("REDO") { redo() },
-        LinearLayout.LayoutParams(0, dp(34), 1f))
+
+    row.addView(outlineButton("↶") { undo() },
+        LinearLayout.LayoutParams(0, dp(38), 1f).apply { marginEnd = dp(3) })
+
+    row.addView(outlineButton("◀◀") { timelineView.jumpToPrevEdit() },
+        LinearLayout.LayoutParams(0, dp(38), 1f).apply { marginEnd = dp(3) })
+
+    val playBtn = outlineButton("▶") { togglePlayback() }
+    playBtn.textSize = 16f
+    playPauseButton = playBtn
+    row.addView(playBtn,
+        LinearLayout.LayoutParams(0, dp(38), 2f).apply { marginEnd = dp(3) })
+
+    row.addView(outlineButton("▶▶") { timelineView.jumpToNextEdit() },
+        LinearLayout.LayoutParams(0, dp(38), 1f).apply { marginEnd = dp(3) })
+
+    row.addView(outlineButton("↷") { redo() },
+        LinearLayout.LayoutParams(0, dp(38), 1f))
+
     return row
 }
 // -------------------------------------------------------------------------
@@ -787,10 +797,10 @@ private fun addHeader(label: String) {
     // Playback
     // =========================================================================
     private fun togglePlayback() {
-        state.isPlaying = !state.isPlaying
-        statusLabel.text = if (state.isPlaying) "PLAYING" else "READY"
+    state.isPlaying = !state.isPlaying
+    playPauseButton?.text = if (state.isPlaying) "❚❚" else "▶"
+    statusLabel.text = if (state.isPlaying) "PLAYING" else "READY"
     }
-
     // =========================================================================
     // Project operations
     // =========================================================================
