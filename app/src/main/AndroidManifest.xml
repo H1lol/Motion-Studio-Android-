@@ -2,21 +2,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- ============================================================
-         Permissions
-         ============================================================ -->
+    <!-- Permissions -->
 
     <!-- Speech recognition for auto-captions (AiCaptionService) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
-    <!-- Internet — reserved for future cloud AI endpoints.
+    <!-- Internet - reserved for future cloud AI endpoints.
          Remove if you never make network calls. -->
     <uses-permission android:name="android.permission.INTERNET" />
-
-    <!-- Media read. The app uses SAF (ACTION_OPEN_DOCUMENT) which
-         grants per-file access without these, but declaring them lets
-         the file picker remember recent locations and supports
-         some providers that require explicit permission. -->
 
     <!-- Android 13+ (API 33) granular media permissions -->
     <uses-permission
@@ -29,29 +22,24 @@
         android:name="android.permission.READ_MEDIA_AUDIO"
         tools:targetApi="33" />
 
-    <!-- Android 12 and below — legacy storage read -->
+    <!-- Android 12 and below - legacy storage read -->
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
 
-    <!-- ============================================================
-         Hardware features
-         ============================================================ -->
+    <!-- Hardware features -->
 
-    <!-- The renderer uses OpenGL ES 2.0. Every Android device since
-         2011 supports this, but declaring it filters the Play Store. -->
+    <!-- The renderer uses OpenGL ES 2.0. -->
     <uses-feature
         android:glEsVersion="0x00020000"
         android:required="true" />
 
-    <!-- Touch input is required; no stylus/mouse-only devices. -->
+    <!-- Touch input is required. -->
     <uses-feature
         android:name="android.hardware.touchscreen"
         android:required="true" />
 
-    <!-- ============================================================
-         Application
-         ============================================================ -->
+    <!-- Application -->
 
     <application
         android:allowBackup="false"
@@ -63,12 +51,13 @@
         android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen"
         tools:targetApi="34">
 
-        <!-- Main editor activity — the only screen in the app. -->
+        <!-- Main editor activity - the only screen in the app.
+             Landscape-only (either direction) to match the Motion Studio UI. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
-            android:screenOrientation="portrait"
+            android:screenOrientation="sensorLandscape"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode|density|fontScale"
             android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen"
             android:windowSoftInputMode="adjustResize">
