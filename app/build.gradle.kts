@@ -5,7 +5,31 @@ plugins {
 }
 
 android {
-    // ...keep your existing namespace, compileSdk, defaultConfig, etc.
+    namespace = "com.motionstudio"
+    compileSdk = 35
+
+    defaultConfig {
+        applicationId = "com.motionstudio"
+        minSdk = 24
+        targetSdk = 35
+        versionCode = 1
+        versionName = "1.0"
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
     buildFeatures {
         compose = true
     }
@@ -19,5 +43,5 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.activity:activity-compose:1.9.3")
-    // ...keep your other existing dependencies
+    implementation("androidx.core:core-ktx:1.13.1")
 }
