@@ -1,0 +1,5 @@
+package com.motionstudio.part6
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
+data class MemorySnapshot(val heapUsed:Long,val heapMax:Long,val cacheBytes:Long,val gpuBytes:Long,val activeTextures:Int,val decodedFrames:Int,val proxyBytes:Long)
+class MemoryManager(private val cacheUsage:()->Long){private val gpu=AtomicLong();private val textures=AtomicLong();private val frames=AtomicLong();private val proxies=AtomicLong();fun snapshot():MemorySnapshot{val rt=Runtime.getRuntime();return MemorySnapshot(rt.totalMemory()-rt.freeMemory(),rt.maxMemory(),cacheUsage(),gpu.get(),textures.get().toInt(),frames.get().toInt(),proxies.get())};fun registerGpu(bytes:Long)=gpu.addAndGet(bytes);fun registerTexture(delta:Int)=textures.addAndGet(delta.toLong());fun registerDecodedFrame(delta:Int)=frames.addAndGet(delta.toLong());fun registerProxy(bytes:Long)=proxies.addAndGet(bytes);fun underPressure(ratio:Double=.85)=snapshot().let{it.heapMax>0&&it.heapUsed.toDouble()/it.heapMax>=ratio};fun releaseUnderPressure(release:()->Unit){if(underPressure())release()}}

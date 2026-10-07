@@ -1,0 +1,11 @@
+package com.motionstudio.part6
+import com.motionstudio.part3.Project
+import java.io.File
+import java.security.MessageDigest
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
+
+data class SerializedProject(val schema:Int,val projectId:String,val payload:ByteArray,val checksum:String)
+class ProjectSerializer(private val schemaVersion:Int=1){fun serialize(project:Project,extra:Map<String,Any?> = emptyMap()):ByteArray{val s=buildString{append("schema=").append(schemaVersion).append('\n');append("projectId=").append(esc(project.id)).append('\n');project.compositions.sortedBy{it.id}.forEach{append("composition=").append(listOf(it.id,it.width,it.height,it.fps,it.duration).joinToString("|"){esc(it.toString())}).append('\n')};extra.toSortedMap().forEach{append("extra.").append(esc(it.key)).append('=').append(esc(canonical(it.value))).append('\n')}};val raw=s.toByteArray(Charsets.UTF_8);val out=java.io.ByteArrayOutputStream();GZIPOutputStream(out).use{it.write(raw)};return out.toByteArray()}
+ fun deserialize(data:ByteArray):SerializedProject{val raw=GZIPInputStream(data.inputStream()).use{it.readBytes()};val lines=raw.toString(Charsets.UTF_8).lines();val schema=lines.firstOrNull{it.startsWith("schema=")}?.substringAfter('=')?.toIntOrNull()?:error("Missing schema");val id=lines.firstOrNull{it.startsWith("projectId=")}?.substringAfter('=')?.let(::unesc)?:error("Missing projectId");return SerializedProject(schema,id,raw,sha(raw))}
+ fun write(project:Project,file:File,extra:Map<String,Any?> = emptyMap()){val b=serialize(project,extra);val tmp=File(file.parentFile,file.name+".tmp");tmp.writeBytes(b);require(tmp.renameTo(file))};fun read(file:File)=deserialize(file.readBytes());private fun esc(s:String)=s.replace("%","%25").replace("\n","%0A").replace("=","%3D").replace("|","%7C");private fun unesc(s:String)=s.replace("%7C","|").replace("%3D","=").replace("%0A","\n").replace("%25","%");private fun canonical(v:Any?):String=when(v){null->"null";is Map<*,*>->v.entries.sortedBy{it.key.toString()}.joinToString("{",",","}"){esc(it.key.toString())+":"+canonical(it.value)};is Iterable<*>->v.joinToString("[",",","]"){canonical(it)};else->v.toString()};private fun sha(b:ByteArray)=MessageDigest.getInstance("SHA-256").digest(b).joinToString(""){"%02x".format(it)}}
