@@ -1,0 +1,2 @@
+package com.motionstudio.part3
+data class CameraModel(var position:Vector3=Vector3(0.0,0.0,0.0),var rotation:Quaternion=Quaternion(1.0,0.0,0.0,0.0),var fovDegrees:Double=50.0,var focalLengthMm:Double=50.0,var focusDistance:Double=10.0,var aperture:Double=2.8){init{require(fovDegrees>0&&fovDegrees<180&&focalLengthMm>0&&focusDistance>0&&aperture>0)};fun projection(aspect:Double,near:Double=.1,far:Double=10000.0)=ThreeD.perspective(Math.toRadians(fovDegrees),aspect,near,far)}

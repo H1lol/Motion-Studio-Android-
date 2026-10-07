@@ -1,0 +1,6 @@
+package com.motionstudio.part3
+import com.motionstudio.part2.*
+enum class LayerType{VIDEO,IMAGE,AUDIO,TEXT,SHAPE,ADJUSTMENT,NULL,PRECOMPOSITION,CAMERA,LIGHT}
+data class LayerTransform(var x:Float=0f,var y:Float=0f,var scaleX:Float=1f,var scaleY:Float=1f,var rotation:Float=0f,var anchorX:Float=0f,var anchorY:Float=0f)
+data class Layer(val id:String,val type:LayerType,var start:Double=0.0,var duration:Double=Double.POSITIVE_INFINITY,var visible:Boolean=true,var locked:Boolean=false,var solo:Boolean=false,var muted:Boolean=false,var opacity:Float=1f,var blendMode:BlendMode=BlendMode.NORMAL,var parentId:String?=null,val transform:LayerTransform=LayerTransform(),val metadata:MutableMap<String,String> = mutableMapOf())
+class LayerEngine{private val layers=mutableListOf<Layer>();fun add(l:Layer){require(l.id !in layers.map{it.id});layers.add(l)};fun remove(id:String){layers.removeIf{it.id==id};layers.forEach{if(it.parentId==id)it.parentId=null}};fun ordered()=layers.toList();fun setParent(id:String,parent:String?){require(id!=parent);if(parent!=null)require(parent in layers.map{it.id});layers.first{it.id==id}.parentId=parent;validateHierarchy()};private fun validateHierarchy(){layers.forEach{var p=it.parentId;val seen=mutableSetOf(it.id);while(p!=null){require(seen.add(p)){"Parent cycle"};p=layers.firstOrNull{it.id==p}?.parentId}}}}

@@ -1,0 +1,3 @@
+package com.motionstudio.part3
+import com.motionstudio.part2.*
+class AdjustmentLayerEngine{data class Range(val start:Double,val end:Double);fun applyBelow(layers:List<Layer>,frames:Map<String,FrameBuffer>,range:Range,effects:EffectChain):Map<String,FrameBuffer>{require(range.end>=range.start);val out=frames.toMutableMap();val ordered=layers.filter{it.visible&&it.start<range.end&&it.start+it.duration>range.start};val adjustment=ordered.filter{it.type==LayerType.ADJUSTMENT};if(adjustment.isEmpty())return out;for(adj in adjustment){val idx=layers.indexOf(adj);for(l in layers.drop(idx+1)){val f=out[l.id]?:continue;out[l.id]=effects.render(f)}};return out}}

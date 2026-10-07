@@ -1,0 +1,2 @@
+package com.motionstudio.part3
+class ParentingEngine(private val layers:LayerEngine){fun world(id:String):LayerTransform{val chain=mutableListOf<Layer>();var cur=layers.ordered().first{it.id==id};val seen=mutableSetOf<String>();while(true){require(seen.add(cur.id));chain+=cur;val p=cur.parentId?:break;cur=layers.ordered().first{it.id==p}};var x=0f;var y=0f;var sx=1f;var sy=1f;var r=0f;for(l in chain.reversed()){x+=l.transform.x*sx;y+=l.transform.y*sy;sx*=l.transform.scaleX;sy*=l.transform.scaleY;r+=l.transform.rotation};return LayerTransform(x,y,sx,sy,r)}}
