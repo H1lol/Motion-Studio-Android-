@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.motionstudio.app"
+    namespace = "com.motionstudio"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.motionstudio.app"
+        applicationId = "com.motionstudio"
         minSdk = 24
         targetSdk = 35
         versionCode = 1
