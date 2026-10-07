@@ -1,0 +1,3 @@
+package com.motionstudio.part2
+interface FrameEffect {val id:String;fun apply(input:FrameBuffer,parameters:Map<String,Float>):FrameBuffer}
+class EffectChain(private val effects:MutableList<Entry> = mutableListOf()){data class Entry(val effect:FrameEffect,var enabled:Boolean=true,var bypass:Boolean=false,val parameters:MutableMap<String,Float> = mutableMapOf());fun add(e:FrameEffect)=apply{effects+=Entry(e)};fun remove(id:String){effects.removeIf{it.effect.id==id}};fun setEnabled(id:String,v:Boolean){effects.first{it.effect.id==id}.enabled=v};fun render(input:FrameBuffer):FrameBuffer{var a=input;for(e in effects)if(e.enabled&&!e.bypass)a=e.effect.apply(a,e.parameters);return a};fun entries():List<Entry> =effects.toList()}

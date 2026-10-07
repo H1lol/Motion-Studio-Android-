@@ -1,0 +1,13 @@
+package com.motionstudio.part2
+import kotlin.math.*
+object BlurEngine {
+ enum class Quality(val passes:Int){LOW(1),MEDIUM(2),HIGH(3)}
+ fun gaussian(src:FrameBuffer,radius:Float,quality:Quality=Quality.MEDIUM)=separable(src,radius,quality)
+ fun separable(src:FrameBuffer,radius:Float,quality:Quality=Quality.MEDIUM):FrameBuffer{val r=radius.coerceIn(0f,128f);if(r<.5f)return src.copy();var a=src.copy();repeat(quality.passes){a=one(a,r,true);a=one(a,r,false)};return a}
+ fun box(src:FrameBuffer,radius:Int):FrameBuffer{val r=radius.coerceIn(0,128);if(r==0)return src.copy();var a=src.copy();repeat(2){a=boxPass(a,r,true);a=boxPass(a,r,false)};return a}
+ fun directional(src:FrameBuffer,radius:Float,angle:Float):FrameBuffer{val r=radius.coerceIn(0f,128f);val o=FrameBuffer(src.width,src.height);val dx=cos(angle)*r;val dy=sin(angle)*r;for(y in 0 until src.height)for(x in 0 until src.width){var sr=0f;var sg=0f;var sb=0f;var sa=0f;for(i in -8..8){val t=i/8f;val c=src.bilinear(x+dx*t,y+dy*t);sr+=c.r;sg+=c.g;sb+=c.b;sa+=c.a};o.set(x,y,Rgba(sr/17,sg/17,sb/17,sa/17))};return o}
+ fun radial(src:FrameBuffer,amount:Float,cx:Float=.5f,cy:Float=.5f):FrameBuffer{val a=amount.coerceIn(0f,1f);val o=FrameBuffer(src.width,src.height);for(y in 0 until src.height)for(x in 0 until src.width){var r=0f;var g=0f;var b=0f;var aa=0f;for(i in 0..16){val t=i/16f*a;val sx=x+(x-src.width*cx)*t;val sy=y+(y-src.height*cy)*t;val c=src.bilinear(sx,sy);r+=c.r;g+=c.g;b+=c.b;aa+=c.a};o.set(x,y,Rgba(r/17,g/17,b/17,aa/17))};return o}
+ fun zoom(src:FrameBuffer,amount:Float,cx:Float=.5f,cy:Float=.5f)=radial(src,amount,cx,cy)
+ private fun one(src:FrameBuffer,r:Float,h:Boolean):FrameBuffer{val sigma=max(.1f,r/3f);val n=ceil(r).toInt().coerceAtMost(128);val w=FloatArray(n*2+1);var sum=0f;for(i in -n..n){val v=exp(-(i*i)/(2*sigma*sigma));w[i+n]=v;sum+=v};for(i in w.indices)w[i]/=sum;val o=FrameBuffer(src.width,src.height);for(y in 0 until src.height)for(x in 0 until src.width){var rr=0f;var gg=0f;var bb=0f;var aa=0f;for(i in -n..n){val c=if(h)src.get((x+i).coerceIn(0,src.width-1),y)else src.get(x,(y+i).coerceIn(0,src.height-1));val q=w[i+n];rr+=c.r*q;gg+=c.g*q;bb+=c.b*q;aa+=c.a*q};o.set(x,y,Rgba(rr,gg,bb,aa))};return o}
+ private fun boxPass(src:FrameBuffer,r:Int,h:Boolean):FrameBuffer{val o=FrameBuffer(src.width,src.height);val d=2*r+1;for(y in 0 until src.height)for(x in 0 until src.width){var rr=0f;var gg=0f;var bb=0f;var aa=0f;for(i in -r..r){val c=if(h)src.get((x+i).coerceIn(0,src.width-1),y)else src.get(x,(y+i).coerceIn(0,src.height-1));rr+=c.r;gg+=c.g;bb+=c.b;aa+=c.a};o.set(x,y,Rgba(rr/d,gg/d,bb/d,aa/d))};return o}
+}

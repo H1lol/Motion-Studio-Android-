@@ -1,0 +1,5 @@
+package com.motionstudio.part2
+import kotlin.math.*
+data class ChromaKeySettings(val key:Rgba,val tolerance:Float=.2f,val softness:Float=.05f,val despill:Float=.5f,val spillSuppression:Float=.5f,val edgeCleanup:Int=0)
+object ChromaKey { fun apply(src:FrameBuffer,s:ChromaKeySettings):FrameBuffer{require(s.tolerance>=0&&s.softness>=0);val o=FrameBuffer(src.width,src.height);for(y in 0 until src.height)for(x in 0 until src.width){val c=src.get(x,y);val d=sqrt((c.r-s.key.r).pow(2)+(c.g-s.key.g).pow(2)+(c.b-s.key.b).pow(2));val a=((d-s.tolerance)/max(1e-6f,s.softness)).coerceIn(0f,1f);val spill=((c.g-max(c.r,c.b))*s.spillSuppression).coerceAtLeast(0f);val nr=c.r+spill*s.despill;val ng=c.g-spill*s.despill;val nb=c.b+spill*s.despill;o.set(x,y,Rgba(nr,ng,nb,c.a*a))};return if(s.edgeCleanup>0)cleanup(o,s.edgeCleanup) else o}
+ private fun cleanup(src:FrameBuffer,r:Int):FrameBuffer{val o=src.copy();for(y in 0 until src.height)for(x in 0 until src.width){var a=0f;var n=0;for(j in -r..r)for(i in -r..r){a+=src.get((x+i).coerceIn(0,src.width-1),(y+j).coerceIn(0,src.height-1)).a;n++};val c=src.get(x,y);o.set(x,y,Rgba(c.r,c.g,c.b,a/n))};return o}}
